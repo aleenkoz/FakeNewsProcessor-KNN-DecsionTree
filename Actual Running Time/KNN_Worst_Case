@@ -1,0 +1,113 @@
+import os
+import time
+import pandas as pd
+import matplotlib
+matplotlib.use('Agg')  # Use non-interactive backend so savefig works without a display
+import matplotlib.pyplot as plt
+
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.model_selection import train_test_split
+from sklearn.neighbors import KNeighborsClassifier
+
+# =========================
+# LOAD DATASET
+# =========================
+
+base_dir = 'overall/overall'
+
+def load_texts(folder, label):
+
+    folder_path = os.path.join(base_dir, folder)
+
+    texts = []
+
+    for filename in os.listdir(folder_path):
+
+        if filename.endswith(".txt"):
+
+            file_path = os.path.join(folder_path, filename)
+
+            with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+
+                texts.append(f.read())
+
+    return pd.DataFrame({
+        "text": texts,
+        "label": label
+    })
+
+fakeDF = load_texts("fake", 0)
+realDF = load_texts("real", 1)
+
+df = pd.concat([fakeDF, realDF], ignore_index=True)
+
+# =========================
+# TF-IDF
+# =========================
+
+X = df["text"]
+y = df["label"]
+
+vectorizer = TfidfVectorizer(
+    stop_words="english",
+    max_features=5000
+)
+
+X_vec = vectorizer.fit_transform(X)
+
+# =========================
+# SPLIT
+# =========================
+
+X_train_vec, X_test_vec, y_train, y_test = train_test_split(
+    X_vec,
+    y,
+    test_size=0.2,
+    random_state=42,
+    stratify=y
+)
+
+# =========================
+# DATASET SIZES
+# =========================
+
+sizes = [50, 100, 200, 300, 400]
+
+results = []
+
+# Fixed: replaced 'yellow' with 'goldenrod' so all markers are clearly visible
+colors = ['green', 'blue', 'goldenrod', 'orange', 'red']
+
+# =========================
+# KNN WORST CASE
+# =========================
+
+for n in sizes:
+
+    X_sub = X_train_vec[:n]
+    y_sub = y_train.iloc[:n]
+
+    knn = KNeighborsClassifier(n_neighbors=5)
+
+    knn.fit(X_sub, y_sub)
+
+    times = []
+
+    for _ in range(20):
+
+        start = time.time()
+
+        knn.predict(X_test_vec)
+
+        end = time.time()
+
+        runtime = (end - start) * 1_000_000
+
+        times.append(runtime)
+
+    # Worst case = slowest single run out of 20 (maximum)
+    worst_case = max(times)
+
+    results.append(worst_case)
+
+    print(f"n = {n} | Worst Case = {worst_case:.2f} µs")
